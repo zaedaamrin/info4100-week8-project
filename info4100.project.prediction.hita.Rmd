@@ -66,16 +66,83 @@ You can also plot the distribution of variables with histograms or boxplots.
 ############################################### 
 ###### BEGIN INPUT: Explore each dataset ###### 
 ###############################################
-
+library(ggplot2)
+library(lubridate)
 # Exploring Conversations data
-# add code here
-
+n_distinct(con$student_id)
+n_distinct(con$conversation_id)
+summary(con$length_char)
+ggplot(con, aes(x=length_char)) +
+  geom_histogram(bins = 30, alpha = .7) + 
+  theme_minimal() +
+  labs(title = "Messgage Length Distribution", x = "Character length")
 # Exploring Activities data
-# add code here
-
+n_distinct(a$started)
+n_distinct(a$name)
+n_distinct(a$student_id)
+table(a$started, a$completed)
+ggplot(a, aes(x= completed))+ 
+  geom_bar( alpha = .7)+
+  theme_minimal()+
+  labs(title = "Completed Activities Distribution", x = "Competion", y = "Count")
 # Exploring connections between datasets
-# add code here
+linked_conversations <- con |>
+  filter(!is.na(activity_step_id))
 
+nrow(linked_conversations)
+merged_data <- inner_join(a, con, by = c("student_id", "activity_step_id"))
+ggplot(merged_data, aes(x = as.factor(completed), y = length_char, fill = as.factor(completed))) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Message Length vs. Activity Completion", 
+       x = "Completion Status", 
+       y = "Message Length (Characters)") +
+  scale_fill_discrete(name = "Completed")
+library(tidyverse)
+library(lubridate)
+
+deadlines <- tibble(
+  week = c("Week 2", "Week 3", "Week 6", "Week 7"),
+  deadline = ymd_hms(c("2025-02-01 05:00:00", 
+                      "2025-02-08 05:00:00",
+                      "2025-03-01 05:00:00",
+                      "2025-03-08 05:00:00"), 
+                    tz = "UTC")
+)
+
+con$created_at <- ymd_hms(con$created_at, tz = "UTC")
+con$created_at_EST <- with_tz(con$created_at, tz = "America/New_York")
+con$hour_EST <- hour(con$created_at_EST)
+
+merged_data <- a |> 
+  inner_join(con, by = "student_id") |> 
+  mutate(week = case_when(
+    str_detect(name, "Week 2") ~ "Week 2",
+    str_detect(name, "Week 3") ~ "Week 3",
+    str_detect(name, "Week 6") ~ "Week 6",
+    str_detect(name, "Week 7") ~ "Week 7",
+    TRUE ~ NA_character_
+  )) |> 
+  left_join(deadlines, by = "week") |> 
+  mutate(time_to_deadline = as.numeric(difftime(deadline, created_at, units = "hours")))
+
+within_24h <- merged_data |> filter(time_to_deadline >= 0 & time_to_deadline <= 24)
+
+ggplot(within_24h, aes(x = time_to_deadline, fill = as.factor(completed))) +
+  geom_histogram(binwidth = 1, alpha = 0.5) +
+  theme_minimal() +
+  labs(title = "Messages Sent Within 24 Hours of Deadline",
+       x = "Hours Before Deadline",
+       y = "Message Count",
+       fill = "Completion Status")
+
+ggplot(merged_data, aes(x = hour_EST)) +
+  geom_histogram(binwidth = 1, alpha = 0.5) +
+  theme_minimal() +
+  facet_wrap(~completed) +
+  labs(title = "Conversation Activity by Hour, separated by Competion Status (T/F)", 
+       x = "Hour of the Day ", 
+       y = "Message Count")
 ###############################################
 ###############################################
 ```
