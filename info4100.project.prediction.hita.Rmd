@@ -198,7 +198,51 @@ Be sure to use all students in the `con` dataset as the basis, not just those wh
 ####### BEGIN INPUT: Define outcome ###########
 ###############################################
 
-# add code here
+deadlines <- tibble(
+  week = c("Week 2", "Week 3", "Week 6", "Week 7"),
+  deadline = ymd_hms(c("2025-02-01 05:00:00", 
+                      "2025-02-08 05:00:00",
+                      "2025-03-01 05:00:00",
+                      "2025-03-08 05:00:00"), 
+                    tz = "UTC")
+)
+
+elaboration_activities <- a |> 
+  filter(str_detect(name, "Reading Elaboration")) |> 
+  mutate(week = case_when(
+    str_detect(name, "Week 2") ~ "Week 2",
+    str_detect(name, "Week 3") ~ "Week 3",
+    str_detect(name, "Week 6") ~ "Week 6",
+    str_detect(name, "Week 7") ~ "Week 7",
+    TRUE ~ NA_character_
+  )) |> 
+  filter(!is.na(week)) |> 
+  left_join(deadlines, by = "week") |> 
+  mutate(deadline_24h = deadline - (24 * 60 * 60)) |> 
+  select(student_id, activity_step_id, week, deadline, deadline_24h, completed)
+
+all_students <- con |> distinct(student_id)
+
+students_missing <- crossing(all_students, deadlines) |> 
+  anti_join(elaboration_activities, by = "student_id") |> 
+  mutate(deadline_24h = deadline - (24 * 60 * 60), completed = NA)
+
+outcome_data <- bind_rows(elaboration_activities, students_missing) |> 
+  mutate(
+    missed_submission = ifelse(is.na(completed) | completed == FALSE, 1, 0),
+    deadline_numeric = as.numeric(as.POSIXct(deadline, tz = "UTC")),
+    deadline_24h_numeric = as.numeric(as.POSIXct(deadline_24h, tz = "UTC"))
+  ) |> 
+  distinct(student_id, week, .keep_all = TRUE) |> 
+  select(student_id, week, missed_submission, deadline, deadline_24h, deadline_numeric, deadline_24h_numeric)
+
+outcome_summary <- outcome_data |> 
+  group_by(week) |> 
+  summarise(
+    total_students = n(),
+    missed_count = sum(missed_submission),
+    missed_percentage = round(mean(missed_submission) * 100, 2)
+  )
 
 ############################################### 
 ############################################### 
