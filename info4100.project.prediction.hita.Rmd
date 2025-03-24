@@ -232,9 +232,8 @@ outcome_data <- bind_rows(elaboration_activities, students_missing) |>
     missed_submission = ifelse(is.na(completed) | completed == FALSE, 1, 0),
     deadline_numeric = as.numeric(as.POSIXct(deadline, tz = "UTC")),
     deadline_24h_numeric = as.numeric(as.POSIXct(deadline_24h, tz = "UTC"))
-  ) |> 
-  distinct(student_id, week, .keep_all = TRUE) |> 
-  select(student_id, week, missed_submission, deadline, deadline_24h, deadline_numeric, deadline_24h_numeric)
+  ) |>
+  select(student_id, activity_step_id, week, missed_submission, deadline, deadline_24h, deadline_numeric, deadline_24h_numeric)
 
 outcome_summary <- outcome_data |> 
   group_by(week) |> 
@@ -281,8 +280,55 @@ head(example_features)
 ############################################### 
 ###### BEGIN INPUT: Engineer features #########
 ###############################################
+# features explained, can erase before submitting:
+# total_replies: total number of replies student sent before the 24-hour cutoff before the deadline. Lower value might mean higher chance of missed submission.
+# last_msg_cutoff_distance: time between when the last message sent and the 24-hour cutoff before the deadline (in hours). Lower value might indicate last-minute work and higher chance of missed submission.
+# avg_gap: average time gap between consecutive messages in hours. Larger value might mean higher chance of missed submission.
+# window_36hr_msgs: the number of messages the student sent in the last 12 hours before the deadline cutoff. 
+# window_48hr_msgs: the number of messages the student send up to 24 hours before the cutoff.
+# late_early_msg_difference: the difference between the messages sent in the late messages window and messages in the early messages window. Larger value indicates last-minute work behavior and higher chance of missed submission.
+# student_system_length_ratio: the ratio between the average length of system messages compared to the average length of student messages. Larger value might mean higher chance of missed submission.
 
-# add code here
+features <- tibble()
+
+for (week in deadlines$week) {
+  current_deadline <- deadlines$deadline[deadlines$week == week]
+  cutoff_time <- current_deadline - secs_in_day
+  late_cutoff_time <- cutoff_time - (12 * 3600)
+  early_cutoff_time <- cutoff_time - (24 * 3600)
+  
+  temp_features <- con %>%
+    filter(as.numeric(as.POSIXct(created_at, tz = "UTC")) < 
+           as.numeric(current_deadline) - secs_in_day) %>%
+    filter(!is.na(activity_step_id)) %>%
+    arrange(student_id, created_at) %>%
+    group_by(student_id) %>%
+    summarise(
+      total_replies = sum(!is.na(reply_to_id)),
+      last_message_time = max(created_at, na.rm = TRUE),
+      avg_gap = ifelse(n() > 1, mean(diff(as.numeric(created_at)), na.rm = TRUE) / 3600, 100),
+      avg_student_msg_len = mean(length_char[system == FALSE], na.rm = TRUE),
+      avg_system_msg_len = mean(length_char[system == TRUE], na.rm = TRUE),
+      window_36hr_msgs = sum(as.numeric(as.POSIXct(created_at, tz = "UTC")) >= as.numeric(late_cutoff_time) & 
+                      as.numeric(as.POSIXct(created_at, tz = "UTC")) < as.numeric(cutoff_time), na.rm = TRUE),
+      window_48hr_msgs = sum(as.numeric(as.POSIXct(created_at, tz = "UTC")) >= as.numeric(early_cutoff_time) & 
+                       as.numeric(as.POSIXct(created_at, tz = "UTC")) < as.numeric(late_cutoff_time), na.rm = TRUE),
+      late_early_msg_difference = ifelse(total_replies == 0, 
+                                   100, 
+                                   window_36hr_msgs - window_48hr_msgs),
+      .groups = "drop") %>%
+    mutate(
+      activity = week,
+      last_msg_cutoff_distance = ifelse(is.na(last_message_time), -164, 
+                                  as.numeric(difftime(cutoff_time, last_message_time, units = "hours"))),
+      system_student_length_ratio = ifelse(is.na(avg_student_msg_len) | is.na(avg_system_msg_len), 
+                                           130, avg_system_msg_len / avg_student_msg_len)
+    )  
+  
+  features <- bind_rows(features, temp_features)
+}
+
+head(features)
 
 ###############################################
 ###############################################
