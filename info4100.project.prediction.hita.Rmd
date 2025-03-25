@@ -355,6 +355,15 @@ Take all the remaining data (earlier periods for prior weeks) and store them in 
 # test = 
 # train = 
 
+test <- outcome_data %>% 
+  filter(week == "Week 7") %>% 
+  left_join(features, by = c("student_id", "week" = "activity"))
+
+# Take all remaining data (Weeks 2, 3, 6) for training
+train <- outcome_data %>% 
+  filter(week != "Week 7") %>% 
+  left_join(features, by = c("student_id", "week" = "activity"))
+
 ###############################################
 ###############################################
 ```
