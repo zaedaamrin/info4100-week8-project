@@ -381,22 +381,40 @@ Report your F1 score on the training data below (don't forget this!).
 ####### BEGIN INPUT: Train and report #########
 ###############################################
 
+#Linear regression:
+
+train <- na.omit(train)
 # Fit  model to training data
 # add code here
+model_lr <- glm(missed_submission ~ total_replies + last_msg_cutoff_distance + 
+               avg_gap + late_early_msg_difference,
+             data = train, family = binomial)
 
 # Get predictions
 # add code here
+train$pred_prob <- predict(model_lr, newdata = train, type = "response")
+train$pred <- ifelse(train$pred_prob >= 0.5, 1, 0)
 
 # Compute accuracy, recall, precision, and F1
 # add code here
+TP <- sum(train$pred == 1 & train$missed_submission == 1)
+TN <- sum(train$pred == 0 & train$missed_submission == 0)
+FP <- sum(train$pred == 1 & train$missed_submission == 0)
+FN <- sum(train$pred == 0 & train$missed_submission == 1)
+
+accuracy <- (TP + TN) / (TP + TN + FP + FN)
+recall <- ifelse((TP + FN) > 0, TP / (TP + FN), NA)
+precision <- ifelse((TP + FP) > 0, TP / (TP + FP), NA)
 F1 = 2 / (1/recall + 1/precision)
   
 # Training F1 score is ...
 F1
 
+
 ###############################################
 ###############################################
 ```
+
 
 # Step 6: Test your model
 
@@ -408,11 +426,24 @@ Typically, you would only do this once at the very end, but for this project it 
 ####### BEGIN INPUT: Test and report ##########
 ###############################################
 
+#Linear regression:
+
+test <- na.omit(train)
 # Make predictions on the test dataset
 # add code here
+test$pred_prob <- predict(model, newdata = test, type = "response")
+test$pred <- ifelse(test$pred_prob >= 0.5, 1, 0)
 
 # Compute F1
 # add code here
+TP <- sum(test$pred == 1 & test$missed_submission == 1)
+TN <- sum(test$pred == 0 & test$missed_submission == 0)
+FP <- sum(test$pred == 1 & test$missed_submission == 0)
+FN <- sum(test$pred == 0 & test$missed_submission == 1)
+
+accuracy <- (TP + TN) / (TP + TN + FP + FN)
+recall <- ifelse((TP + FN) > 0, TP / (TP + FN), NA)
+precision <- ifelse((TP + FP) > 0, TP / (TP + FP), NA)
 F1 = 2 / (1/recall + 1/precision)
 
 # Testing F1 score is ...
@@ -421,6 +452,7 @@ F1
 ###############################################
 ###############################################
 ```
+
 
 # Step 7: Report
 
